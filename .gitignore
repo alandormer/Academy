@@ -1,0 +1,45 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment & secrets
+.env
+*.env.local
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Editors
+.vscode/settings.json
+.idea/
+
+# Logs
+*.log
+/tmp/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic (keep versions, ignore env pyc)
+app/db/migrations/versions/__pycache__/
+
+# Model files (large binaries — stored outside repo)
+*.gguf
+*.bin
+*.safetensors
+
+# Uploaded/ingested files (raw documents stay in MinIO, not git)
+files/documents/*
+files/audio/*
+!files/documents/.gitkeep
+!files/audio/.gitkeep
