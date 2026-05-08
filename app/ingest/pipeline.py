@@ -15,9 +15,11 @@ Audio files follow a different path (transcripts/router.py):
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -49,7 +51,8 @@ async def ingest_document(
     Transcripts produced from Whisper in-memory have no original file to
     store — callers set source_type="transcript" and MinIO upload is skipped.
     """
-    metadata = metadata or {}
+    metadata = dict(metadata or {})
+    metadata.setdefault("room", _infer_room(filename))
 
     # 1. Upload raw file to MinIO (documents only — transcripts have no original)
     storage_key: str | None = None
@@ -80,6 +83,23 @@ async def ingest_document(
 
     # 5. Persist — single transaction
     async with db.begin():
+        existing_result = await db.execute(
+            select(Source).where(
+                Source.filename == filename,
+                Source.source_type == source_type,
+            )
+        )
+        existing_sources = existing_result.scalars().all()
+        for existing_source in existing_sources:
+            await db.delete(existing_source)
+
+        if existing_sources:
+            logger.info(
+                "Replacing %d existing source(s) for %s",
+                len(existing_sources),
+                filename,
+            )
+
         source = Source(
             filename=filename,
             source_type=source_type,
@@ -114,8 +134,17 @@ def _content_type(filename: str) -> str:
     _map = {
         ".pdf":  "application/pdf",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls":  "application/vnd.ms-excel",
         ".txt":  "text/plain",
         ".md":   "text/markdown",
         ".rst":  "text/x-rst",
     }
     return _map.get(Path(filename).suffix.lower(), "application/octet-stream")
+
+
+def _infer_room(filename: str) -> str | None:
+    match = re.search(r"theatre\s*[-_ ]*(\d+)", filename, re.IGNORECASE)
+    if match:
+        return f"Theatre {match.group(1)}"
+    return None

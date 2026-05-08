@@ -33,3 +33,11 @@ def test_parsers_unsupported():
 
     with pytest.raises(ValueError, match="Unsupported"):
         extract_text("test.xyz", b"data")
+
+
+def test_infer_room_from_filename():
+    from app.ingest.pipeline import _infer_room
+
+    assert _infer_room("Theatre 2 Tech Spec.pdf") == "Theatre 2"
+    assert _infer_room("theatre-1-notes.docx") == "Theatre 1"
+    assert _infer_room("Studio lighting plot.pdf") is None

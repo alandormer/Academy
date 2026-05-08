@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 
 import numpy as np
@@ -18,9 +19,27 @@ class Embedder:
     calls after initial model download.
     """
 
-    def __init__(self, model_name: str) -> None:
-        logger.info("Loading embedding model: %s", model_name)
-        self._model = SentenceTransformer(model_name)
+    def __init__(self, model_name: str, *, local_files_only: bool = False) -> None:
+        logger.info(
+            "Loading embedding model: %s (local_files_only=%s)",
+            model_name,
+            local_files_only,
+        )
+        if local_files_only:
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        try:
+            self._model = SentenceTransformer(
+                model_name,
+                local_files_only=local_files_only,
+            )
+        except Exception as exc:
+            if local_files_only:
+                raise RuntimeError(
+                    f"Embedding model {model_name!r} is not available in the local cache. "
+                    "Download it during setup or disable EMBEDDING_LOCAL_FILES_ONLY."
+                ) from exc
+            raise
         self._model_name = model_name
         logger.info("Embedding model loaded.")
 

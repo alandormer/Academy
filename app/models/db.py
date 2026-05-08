@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
+from app.core.config import settings
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -61,7 +62,7 @@ class Chunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Dimension set at runtime from config; migrations will specify the exact value.
-    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dim), nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

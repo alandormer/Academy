@@ -8,11 +8,16 @@ class Settings(BaseSettings):
     # --- Embeddings ---
     embedding_model: str = "BAAI/bge-m3"
     embedding_dim: int = 1024
+    embedding_local_files_only: bool = False
 
     # --- LLM (GGUF via llama-cpp-python) ---
     gguf_model_path: str = "/Users/alandormer/Projects/contextengine/models/mistral_models/mistral-7b-instruct-v0.3.Q6_K.gguf"
     gguf_n_gpu_layers: int = -1   # -1 = all layers on Metal GPU
     gguf_n_ctx: int = 4096
+
+    # --- LLM (Ollama) ---
+    ollama_model: str = "mistral:7b-instruct"
+    ollama_base_url: str = "http://localhost:11434"
 
     # --- Chunking ---
     chunk_size: int = 400

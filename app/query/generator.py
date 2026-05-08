@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.models.schemas import ChunkResult
 
 logger = logging.getLogger(__name__)
+client = ollama.Client(host=settings.ollama_base_url)
 
 _SYSTEM_PROMPT = """\
 You are a technical assistant for a university technical department.
@@ -55,7 +56,7 @@ async def generate_answer(
     user_message = f"CONTEXT:\n{context_block}\n\nQUESTION:\n{query}"
 
     try:
-        response = ollama.chat(
+        response = client.chat(
             model=settings.ollama_model,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},

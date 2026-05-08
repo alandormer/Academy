@@ -4,9 +4,9 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_embedder, get_llm
+from app.dependencies import get_db, get_embedder
 from app.embed.embedder import Embedder
-from app.llm.ollama import generate_answer
+from app.query.generator import generate_answer
 from app.models.schemas import QueryRequest, QueryResponse
 from app.query.retriever import retrieve
 
@@ -36,7 +36,6 @@ async def query_endpoint(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
     embedder: Embedder = Depends(get_embedder),
-    llm=Depends(get_llm),
 ) -> QueryResponse:
     # 1. Embed the query
     try:
@@ -47,11 +46,13 @@ async def query_endpoint(
 
     # 2. Auto-detect room filter if caller didn't supply one
     metadata_filter = request.metadata_filter
+    auto_metadata_filter: dict[str, str] | None = None
     if not metadata_filter:
         room = _detect_room(request.query)
         if room:
             logger.debug("Auto-detected room filter: %s", room)
-            metadata_filter = {"room": room}
+            auto_metadata_filter = {"room": room}
+            metadata_filter = auto_metadata_filter
 
     # 3. Retrieve relevant chunks
     try:
@@ -61,13 +62,24 @@ async def query_endpoint(
             top_k=request.top_k,
             metadata_filter=metadata_filter,
         )
+        if not chunks and auto_metadata_filter is not None:
+            logger.info(
+                "No chunks found for auto-detected filter %s; retrying without metadata filter",
+                auto_metadata_filter,
+            )
+            chunks = await retrieve(
+                db=db,
+                query_vector=query_vector,
+                top_k=request.top_k,
+                metadata_filter=None,
+            )
     except Exception as exc:
         logger.exception("Retrieval failed")
         raise HTTPException(status_code=500, detail="Retrieval failed.") from exc
 
     # 4. Generate grounded answer
     try:
-        answer = await generate_answer(query=request.query, chunks=chunks, llm=llm)
+        answer = await generate_answer(query=request.query, chunks=chunks)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
