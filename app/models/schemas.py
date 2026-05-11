@@ -72,9 +72,19 @@ class ChunkResult(BaseModel):
     metadata: dict[str, Any]
 
 
+class QueryMetadata(BaseModel):
+    """Metadata about query execution."""
+    elapsed_ms: float
+    chunk_count: int
+    room_filter_applied: str | None = None
+    fallback_used: bool = False
+    auto_detected_room: str | None = None
+
+
 class QueryResponse(BaseModel):
     answer: str
     sources: list[ChunkResult]
+    metadata: QueryMetadata
 
 
 # ---------------------------------------------------------------------------
