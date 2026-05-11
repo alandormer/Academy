@@ -52,7 +52,20 @@ async def ingest_document(
     store — callers set source_type="transcript" and MinIO upload is skipped.
     """
     metadata = dict(metadata or {})
-    metadata.setdefault("room", _infer_room(filename))
+
+    # --- Infer location from filename if not supplied ---
+    inferred_location = _infer_location(filename)
+    if inferred_location:
+        metadata.setdefault("location", inferred_location)
+        metadata.setdefault("room", inferred_location)   # legacy compat
+
+    # --- Apply typed metadata defaults ---
+    metadata.setdefault("visibility", "internal")
+    metadata.setdefault("domain", _infer_domain(filename, metadata))
+    metadata.setdefault(
+        "confidence",
+        "transcript" if source_type == "transcript" else "official",
+    )
 
     # 1. Upload raw file to MinIO (documents only — transcripts have no original)
     storage_key: str | None = None
@@ -143,8 +156,44 @@ def _content_type(filename: str) -> str:
     return _map.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
-def _infer_room(filename: str) -> str | None:
-    match = re.search(r"theatre\s*[-_ ]*(\d+)", filename, re.IGNORECASE)
-    if match:
-        return f"Theatre {match.group(1)}"
+def _infer_location(filename: str) -> str | None:
+    """Infer a physical location from filename patterns."""
+    # Theatre N
+    m = re.search(r"theatre\s*[-_ ]*(\d+)", filename, re.IGNORECASE)
+    if m:
+        return f"Theatre {m.group(1)}"
+    # Studio A / Studio 1
+    m = re.search(r"studio\s*[-_ ]*([a-z0-9]+)", filename, re.IGNORECASE)
+    if m:
+        return f"Studio {m.group(1).upper()}"
+    # Mac Lab N
+    m = re.search(r"mac\s*lab\s*[-_ ]*(\d+)", filename, re.IGNORECASE)
+    if m:
+        return f"Mac Lab {m.group(1)}"
     return None
+
+
+# Legacy alias kept so any remaining callers don't break
+_infer_room = _infer_location
+
+
+_DOMAIN_PATTERNS: list[tuple[str, str]] = [
+    (r"theatre",        "theatre"),
+    (r"studio",         "audio"),
+    (r"mac.?lab",       "mac_lab"),
+    (r"av[-_ ]",        "av"),
+    (r"health.?safety|h.s", "health_safety"),
+    (r"procedure|policy",   "admin"),
+    (r"schedule|event",     "events"),
+]
+
+
+def _infer_domain(filename: str, metadata: dict) -> str:
+    """Infer operational domain from filename or existing metadata keys."""
+    # If location was already set, use that to drive domain
+    location = metadata.get("location") or metadata.get("room", "")
+    combined = (filename + " " + location).lower()
+    for pattern, domain in _DOMAIN_PATTERNS:
+        if re.search(pattern, combined, re.IGNORECASE):
+            return domain
+    return "general"

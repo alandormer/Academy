@@ -36,8 +36,30 @@ async def retrieve(
 
     if metadata_filter:
         import json
-        filter_clause = "AND c.metadata @> CAST(:meta_filter AS jsonb)"
-        params["meta_filter"] = json.dumps(metadata_filter)
+        # Special handling for location: match against EITHER "location" OR
+        # legacy "room" key so documents ingested before the schema change still
+        # surface correctly.
+        location = metadata_filter.get("location")
+        if location and "room" not in metadata_filter:
+            # Build two containment checks — chunk must satisfy at least one
+            rest = {k: v for k, v in metadata_filter.items() if k != "location"}
+            if rest:
+                filter_clause = (
+                    "AND (c.metadata @> CAST(:meta_filter_loc AS jsonb) "
+                    "OR c.metadata @> CAST(:meta_filter_room AS jsonb)) "
+                    "AND c.metadata @> CAST(:meta_filter_rest AS jsonb)"
+                )
+                params["meta_filter_rest"] = json.dumps(rest)
+            else:
+                filter_clause = (
+                    "AND (c.metadata @> CAST(:meta_filter_loc AS jsonb) "
+                    "OR c.metadata @> CAST(:meta_filter_room AS jsonb))"
+                )
+            params["meta_filter_loc"] = json.dumps({"location": location})
+            params["meta_filter_room"] = json.dumps({"room": location})
+        else:
+            filter_clause = "AND c.metadata @> CAST(:meta_filter AS jsonb)"
+            params["meta_filter"] = json.dumps(metadata_filter)
 
     sql = text(
         f"""
