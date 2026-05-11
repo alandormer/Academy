@@ -282,6 +282,7 @@
     .dr-open:hover { border-color: var(--accent); }
     .dr-del { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 14px; padding: 0 2px; }
     .dr-del:hover { color: var(--red); }
+    .t-legacy { background: #1e1e1e; color: var(--text-3); border: 1px solid var(--border); font-size: 10px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
     #lib-empty { color: var(--text-3); font-size: 13px; text-align: center; padding: 32px; }
   </style>
 </head>
@@ -677,12 +678,16 @@ async function loadLibrary() {
         (m.location||m.room) ? '<span class="tag t-loc">' + esc(m.location||m.room) + '</span>' : '',
         m.document_type ? '<span class="tag t-type">' + esc(m.document_type.replace(/_/g,' ')) + '</span>' : '',
         m.visibility    ? '<span class="tag t-vis">' + esc(m.visibility) + '</span>' : '',
+        !s.storage_key  ? '<span class="t-legacy" title="Ingested before raw file storage was enabled">legacy</span>' : '',
       ].filter(Boolean).join('');
       var date = s.ingested_at ? new Date(s.ingested_at).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'}) : '';
+      var openBtn = s.storage_key
+        ? '<a class="dr-open" href="/sources/' + s.id + '/download" target="_blank" rel="noopener">Open</a>'
+        : '<span class="dr-open" style="opacity:.35;cursor:not-allowed;pointer-events:none" title="File unavailable — legacy document">Open</span>';
       row.innerHTML = '<span class="dr-name" title="' + esc(s.filename) + '">' + esc(s.filename) + '</span>'
         + '<div class="dr-tags">' + tags + '</div>'
         + '<span class="dr-date">' + esc(date) + '</span>'
-        + '<a class="dr-open" href="/sources/' + s.id + '/download" target="_blank" rel="noopener">Open</a>'
+        + openBtn
         + '<button class="dr-del" data-id="' + s.id + '" title="Delete">\ud83d\uddd1</button>';
       row.querySelector('.dr-del').addEventListener('click', async function() {
         if (!confirm('Delete "' + s.filename + '" and all its chunks?')) return;

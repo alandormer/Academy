@@ -88,9 +88,17 @@ class MinIOClient:
             self._client.stat_object(bucket, key)
             return True
         except S3Error as exc:
-            if exc.code == "NoSuchKey":
+            if exc.code in ("NoSuchKey", "NoSuchObject"):
                 return False
             raise
+
+    def get_object(self, *, bucket: str, key: str):
+        """
+        Return an HTTPResponse stream for *key* in *bucket*.
+
+        Raises S3Error if the object does not exist; let callers handle it.
+        """
+        return self._client.get_object(bucket, key)
 
     def object_path(self, *, bucket: str, key: str) -> str:
         """Return a human-readable path string: bucket/key."""

@@ -1,3 +1,4 @@
+import urllib.parse
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -5,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.dependencies import get_db, get_minio
 from app.models.db import Source
 from app.models.schemas import SourceOut
@@ -91,16 +93,27 @@ async def download_source(
     source = result.scalar_one_or_none()
     if not source:
         raise HTTPException(status_code=404, detail="Source not found.")
-    if not source.storage_key:
-        raise HTTPException(status_code=404, detail="No stored file for this source.")
 
-    # Determine bucket from source_type
-    bucket = "academy-audio" if source.source_type == "audio" else "academy-raw"
+    if not source.storage_key:
+        raise HTTPException(
+            status_code=404,
+            detail="Original file unavailable — document was ingested before raw file storage was enabled.",
+        )
+
+    # All document originals live in academy-raw; audio transcripts have no
+    # stored original (storage_key is NULL for those).
+    bucket = settings.minio_bucket_raw
+
+    if not minio.exists(bucket=bucket, key=source.storage_key):
+        raise HTTPException(
+            status_code=404,
+            detail="Raw file missing from object storage.",
+        )
 
     try:
-        data = minio.client.get_object(bucket, source.storage_key)
+        data = minio.get_object(bucket=bucket, key=source.storage_key)
     except Exception as exc:
-        raise HTTPException(status_code=404, detail="File not found in storage.") from exc
+        raise HTTPException(status_code=502, detail="Object storage error.") from exc
 
     # Infer content type from filename extension
     filename = source.filename or source.storage_key.split("/")[-1]
@@ -108,6 +121,8 @@ async def download_source(
     content_types = {
         "pdf": "application/pdf",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
         "txt": "text/plain",
         "md": "text/markdown",
         "mp3": "audio/mpeg",
@@ -116,11 +131,10 @@ async def download_source(
     }
     media_type = content_types.get(ext, "application/octet-stream")
 
-    import urllib.parse
     safe_name = urllib.parse.quote(filename)
 
     return StreamingResponse(
         data.stream(32 * 1024),
         media_type=media_type,
-        headers={"Content-Disposition": f'inline; filename*=UTF-8\'\'{safe_name}'},
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{safe_name}"},
     )

@@ -29,6 +29,17 @@ async def lifespan(app: FastAPI):
         local_files_only=settings.embedding_local_files_only,
     )
 
+    # GGUF LLM (loaded once — Metal GPU via llama-cpp-python)
+    from llama_cpp import Llama
+    logger.info("Loading GGUF model: %s", settings.gguf_model_path)
+    app.state.llm = Llama(
+        model_path=settings.gguf_model_path,
+        n_gpu_layers=settings.gguf_n_gpu_layers,
+        n_ctx=settings.gguf_n_ctx,
+        verbose=False,
+    )
+    logger.info("GGUF model loaded")
+
     # MinIO client
     minio = MinIOClient()
     minio.ensure_buckets()
